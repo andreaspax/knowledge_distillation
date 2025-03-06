@@ -3,7 +3,8 @@ import transformers
 import data
 import utils
 import os
-import knowledge_distillation.models as models
+import models
+
 from tqdm import tqdm
 
 device = utils.get_device()
@@ -19,7 +20,7 @@ def train_kd(epochs=5):
     "meta-llama/Llama-3.2-1B", 
     token=os.getenv("HF_TOKEN_CURSOR")
 )
-    teacher.eval()
+    
     teacher.to(device)
 
     # Create model
@@ -39,6 +40,9 @@ def train_kd(epochs=5):
     optimizer = torch.optim.AdamW(student.parameters(), lr=1e-4)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
 
+    teacher.eval()
+    student.train()
+    
     for epoch in range(epochs):
         loop = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
         for batch in loop:
