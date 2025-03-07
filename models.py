@@ -13,23 +13,34 @@ class Decoder(torch.nn.Module):
         super().__init__()
         self.token_embed = torch.nn.Embedding(vocab_size, embed_size)
         
-        # Add a position encoder (simple linear projection of one-hot position vectors)
+        # Position encoding
         self.pos_encoder = torch.nn.Parameter(torch.randn(1, max_seq_len, embed_size))
-        decoder_layer = torch.nn.TransformerDecoderLayer(
+        
+        # Use transformer encoder layers with causal attention mask
+        # This provides the same functionality as a decoder without cross-attention
+        encoder_layer = torch.nn.TransformerEncoderLayer(
             d_model=embed_size,
             nhead=heads,
             dim_feedforward=embed_size * 4,
             activation="gelu",
             batch_first=True
         )
-        self.transformer_decoder = torch.nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+        self.transformer = torch.nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.fc = torch.nn.Linear(embed_size, vocab_size)
     
     def forward(self, x):
-        x = self.embedding(x)  # (batch, seq_len, d_model)
+        # Token embeddings
+        x = self.token_embed(x)  # (batch, seq_len, d_model)
+        
+        # Add positional encodings
         x = x + self.pos_encoder[:, :x.size(1), :]
-        mask = torch.nn.Transformer.generate_square_subsequent_mask(x.size(1)).to(x.device)
-        x = self.transformer_decoder(x, memory=None, tgt_mask=mask)
+        
+        # Create causal mask (so tokens can only attend to previous tokens)
+        seq_len = x.size(1)
+        mask = torch.triu(torch.ones(seq_len, seq_len, device=x.device) * float('-inf'), diagonal=1)
+        
+        # Pass through transformer with causal mask
+        x = self.transformer(x, mask=mask)
         logits = self.fc(x)
         return logits
     
